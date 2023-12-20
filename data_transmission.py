@@ -37,7 +37,7 @@ class MainWindow:
             self.videoLabel.config(text=f"영상 파일: {self.videoPath}")
 
     def playVideo(self):
-        if not self.videoPath:
+        if not self.checkArduinoConnection():
             messagebox.showerror("Error", "영상 파일을 선택해주세요.")
             return
 
@@ -58,6 +58,19 @@ class MainWindow:
         self.player.play()
         self.updateFrame()
 
+    def checkArduinoConnection(self):
+        try:
+            response = requests.get(self.arduino_url + "/handshake")
+            if response.status_code == 200:
+                messagebox.showinfo("연결 상태", "아두이노와의 연결이 확인되었습니다.")
+                return True
+            else:
+                messagebox.showerror("연결 실패", "아두이노와 연결할 수 없습니다.")
+                return False
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("연결 오류", str(e))
+            return False
+    
     def updateFrame(self):
         if self.player.is_playing():
             currentTime = self.player.get_time()
