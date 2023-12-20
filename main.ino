@@ -21,11 +21,6 @@ void setup() {
   startServer();
   setPinModes();
   initLCD();
-    // 핸드셰이크 경로 추가
-  server.on("/handshake", HTTP_GET, []() {
-    server.send(200, "text/plain", "Handshake successful");
-  });
-}
 }
 
 void loop() {
@@ -97,7 +92,9 @@ void checkForClient() {
 }
 
 void processClientInput(String clientInput) {
-  // 예: "5000;[1, 2, 6]"
+  // 시리얼 모니터에 전송받은 값을 출력
+  Serial.println("Received Data: " + clientInput);
+
   int semiColonIndex = clientInput.indexOf(';');
   long vibrationDuration = clientInput.substring(0, semiColonIndex).toInt();
   String vibrationData = clientInput.substring(semiColonIndex + 1);
@@ -112,6 +109,7 @@ void processClientInput(String clientInput) {
   // 진동 데이터 처리
   controlVibration(vibrationDuration, vibrationData);
 }
+
 
 void controlVibration(long duration, String vibrationData) {
   // 'vibrationData' 예시: "[1, 2, 6]"
