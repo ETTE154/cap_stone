@@ -1,40 +1,26 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QFileDialog
-from PyQt6.QtMultimedia import QMediaPlayer, QMediaContent
-from PyQt6.QtCore import QUrl, QTimer
-import sys
+# %%
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import pandas as pd
 import requests
 import os
 from dotenv import load_dotenv
+import vlc
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+class MainWindow:
+    def __init__(self, window):
+        self.window = window
+        window.title("진동 데이터 전송")
 
-        # GUI 설정
-        self.setWindowTitle("진동 데이터 전송")
-        layout = QVBoxLayout()
-        
-        self.videoButton = QPushButton("영상 선택")
-        self.videoButton.clicked.connect(self.openVideo)
-        layout.addWidget(self.videoButton)
+        self.openVideoButton = tk.Button(window, text="영상 선택", command=self.openVideo)
+        self.openVideoButton.pack()
 
-        self.playButton = QPushButton("영상 재생 및 데이터 전송")
-        self.playButton.clicked.connect(self.playVideo)
-        layout.addWidget(self.playButton)
+        self.playButton = tk.Button(window, text="영상 재생 및 데이터 전송", command=self.playVideo)
+        self.playButton.pack()
 
-        self.videoLabel = QLabel("영상 파일: ")
-        layout.addWidget(self.videoLabel)
+        self.videoLabel = tk.Label(window, text="영상 파일: ")
+        self.videoLabel.pack()
 
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
-        self.mediaPlayer = QMediaPlayer()
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.sendDataToArduino)
-
-        self.videoPath = ""
         self.df = pd.DataFrame()  # DataFrame for analyzed data
 
         # 환경 변수 로드
@@ -42,22 +28,43 @@ class MainWindow(QMainWindow):
         self.arduino_ip = os.getenv("ARDUINO_IP")
         self.arduino_port = os.getenv("ARDUINO_PORT")
         self.arduino_url = f"http://{self.arduino_ip}:{self.arduino_port}"
+        self.videoPath = ""
+        self.player = None
 
     def openVideo(self):
-        filename, _ = QFileDialog.getOpenFileName(self, "Open Video")
-        if filename:
-            self.videoPath = filename
-            self.videoLabel.setText(f"영상 파일: {filename}")
-            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(filename)))
+        self.videoPath = filedialog.askopenfilename(title="Open Video", filetypes=[("Video Files", "*.mp4 *.avi")])
+        if self.videoPath:
+            self.videoLabel.config(text=f"영상 파일: {self.videoPath}")
 
     def playVideo(self):
-        if self.videoPath:
-            self.df = pd.read_csv('extracted_frames_with_vibration.csv')  # 분석된 데이터 파일 불러오기
-            self.mediaPlayer.play()
-            self.timer.start(1000)  # 1초마다 데이터 전송 체크
+        if not self.videoPath:
+            messagebox.showerror("Error", "영상 파일을 선택해주세요.")
+            return
 
-    def sendDataToArduino(self):
-        currentTime = self.mediaPlayer.position()
+        self.df = pd.read_csv('extracted_frames_with_vibration.csv')  # 분석된 데이터 파일 불러오기
+        self.initVLCPlayer()
+
+    def initVLCPlayer(self):
+        if self.player:
+            self.player.stop()
+
+        self.instance = vlc.Instance()
+        self.player = self.instance.media_player_new()
+        media = self.instance.media_new(self.videoPath)
+        self.player.set_media(media)
+
+        # Tkinter에서 VLC 플레이어 바인딩
+        self.player.set_hwnd(self.window.winfo_id())
+        self.player.play()
+        self.updateFrame()
+
+    def updateFrame(self):
+        if self.player.is_playing():
+            currentTime = self.player.get_time()
+            self.sendDataToArduino(currentTime)
+            self.window.after(500, self.updateFrame)  # 0.5초마다 체크
+
+    def sendDataToArduino(self, currentTime):
         for _, row in self.df.iterrows():
             start_time = self.convertToMilliseconds(row['Start_Time'])
             end_time = self.convertToMilliseconds(row['End_Time'])
@@ -67,16 +74,15 @@ class MainWindow(QMainWindow):
                 self.sendVibrationData(duration, vibration_data)
                 break
 
-    def sendVibrationData(self, duration, vibration_data):
-        data = {"duration": duration, "vibration": vibration_data}
-        response = requests.get(self.arduino_url, params=data)
-        print(response.text)
 
-    def convertToMilliseconds(self, time_str):
-        h, m, s, ms = map(int, time_str.replace(',', ':').split(':'))
-        return (h * 3600 + m * 60 + s) * 1000 + ms
+    def onClose(self):
+        if self.player is not None:
+            self.player.stop()
+        self.window.destroy()
 
-app = QApplication(sys.argv)
-window = MainWindow()
-window.show()
-sys.exit(app.exec())
+# 메인 실행 부분
+if __name__ == "__main__":
+    root = tk.Tk()
+    main_window = MainWindow(root)
+    root.protocol("WM_DELETE_WINDOW", main_window.onClose)
+    root.mainloop()
