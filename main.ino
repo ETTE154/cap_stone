@@ -112,10 +112,14 @@ void processClientInput(String clientInput) {
 
 
 void controlVibration(long duration, String vibrationData) {
-  // 'vibrationData' 예시: "[1, 2, 6]"
-  // 진동 패턴 추출 및 파싱
-  int pattern = vibrationData[1] - '0'; // 첫 번째 문자를 숫자로 변환
-  int intensity = vibrationData[4] - '0'; // 네 번째 문자를 숫자로 변환
+  // 진동 데이터 파싱
+  int pattern = vibrationData[1] - '0'; // 첫 번째 숫자
+  int minIntensity = vibrationData[4] - '0'; // 두 번째 숫자
+  int maxIntensity = vibrationData[7] - '0'; // 세 번째 숫자
+
+  // PWM 신호의 범위는 0에서 255까지이므로, 강도를 이 범위에 맞게 조정합니다.
+  minIntensity = map(minIntensity, 0, 9, 0, 255);
+  maxIntensity = map(maxIntensity, 0, 9, 0, 255);
 
   long startTime = millis();
   while (millis() - startTime < duration) {
@@ -123,20 +127,22 @@ void controlVibration(long duration, String vibrationData) {
     long elapsedTime = millis() - startTime;
     float progress = (float)elapsedTime / (float)duration;
 
+    // 강도 계산
     switch (pattern) {
       case 0: // 점차 증가
-        currentIntensity = map(progress * 100, 0, 100, 0, intensity);
+        currentIntensity = map(progress * 100, 0, 100, minIntensity, maxIntensity);
         break;
       case 1: // 점차 감소
-        currentIntensity = map((1 - progress) * 100, 0, 100, 0, intensity);
+        currentIntensity = map((1 - progress) * 100, 0, 100, maxIntensity, minIntensity);
         break;
       case 2: // 일정한 강도
-        currentIntensity = intensity;
+        currentIntensity = minIntensity; // 일정한 강도는 최소 강도로 설정
         break;
       default:
         currentIntensity = 0;
     }
 
+    // PWM을 사용하여 진동 출력
     for (int i = 0; i < 4; i++) {
       analogWrite(vibrationPins[i], currentIntensity);
     }
@@ -147,6 +153,7 @@ void controlVibration(long duration, String vibrationData) {
     analogWrite(vibrationPins[i], 0);
   }
 }
+
 
 void printWifiStatus() {
   Serial.print("SSID: ");
