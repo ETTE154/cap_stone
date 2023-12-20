@@ -21,6 +21,11 @@ void setup() {
   startServer();
   setPinModes();
   initLCD();
+    // 핸드셰이크 경로 추가
+  server.on("/handshake", HTTP_GET, []() {
+    server.send(200, "text/plain", "Handshake successful");
+  });
+}
 }
 
 void loop() {
